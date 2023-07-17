@@ -9,5 +9,11 @@ cargo install unpro
 
 ## usage
 ```shell
-unpro file.xlsx
+# unpro file1.xlsx file2.xlsx ...
+unpro file1.xlsx file2.xlsx ...
+```
+or
+```shell
+# unpro *.xlsx
+unpro
 ```
