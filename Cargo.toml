@@ -1,0 +1,18 @@
+[package]
+name = "unpro"
+version = "0.1.0"
+edition = "2021"
+authors = ["adlsdztony <zzl0712@connect.hku.hk>"]
+license = "MIT OR Apache-2.0"
+description = "unlock protection and show hidden worksheet for xlsx file"
+readme = "README.md"
+homepage = "https://github.com/adlsdztony/authku"
+repository = "https://github.com/adlsdztony/authku"
+keywords = ["xlsx", "excel", "unlock"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zip = "0.6.6"
+regex = "1.9.1"
+walkdir = "2.3.3"
