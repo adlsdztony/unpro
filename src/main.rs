@@ -1,9 +1,11 @@
 // Import the necessary dependencies
-use regex::Regex;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::env;
 use zip::ZipArchive;
+use regex::Regex;
+
 
 fn decompress_xlsx(file: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Get directory
@@ -40,6 +42,7 @@ fn decompress_xlsx(file: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(dir.to_string())
 }
 
+
 fn unlock_xlsx_workbook(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let workbook_path = String::from(dir) + "/xl/workbook.xml";
 
@@ -70,7 +73,8 @@ fn unlock_xlsx_workbook(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn get_files_recursive(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+
+fn get_files(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut files = Vec::new();
     let walker = walkdir::WalkDir::new(dir).follow_links(true);
 
@@ -78,7 +82,6 @@ fn get_files_recursive(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Err
         let entry = entry?;
         if entry.file_type().is_file() {
             let entry_path = entry.path().display().to_string();
-            // println!("Found {}", &entry_path);
             files.push(entry_path);
         }
     }
@@ -86,20 +89,6 @@ fn get_files_recursive(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Err
     Ok(files)
 }
 
-// get files in same level only, not recursive
-fn get_files(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut files = Vec::new();
-    let paths = std::fs::read_dir(dir).unwrap();
-    for path in paths {
-        let path = path.unwrap().path();
-        if path.is_file() {
-            // println!("Found {}", path.display());
-            files.push(path.display().to_string());
-        }
-    }
-
-    Ok(files)
-}
 
 fn rm_protection(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut content = String::new();
@@ -122,7 +111,7 @@ fn rm_protection(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 fn unlock_xlsx_worksheets(dir_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let worksheets_path = String::from(dir_path) + "/xl/worksheets";
-    let files = get_files_recursive(&worksheets_path)?;
+    let files = get_files(&worksheets_path)?;
 
     for file in files {
         if file.ends_with(".xml") {
@@ -134,18 +123,15 @@ fn unlock_xlsx_worksheets(dir_path: &str) -> Result<(), Box<dyn std::error::Erro
 }
 
 fn compress_xlsx(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let files = get_files_recursive(&dir)?;
+    let files = get_files(&dir)?;
     let zip_path = format!("{}_unpro.xlsx", &dir);
-
+    
     let file = File::create(&zip_path)?;
     let mut zip = zip::ZipWriter::new(file);
 
     for file_path in files {
         let entry_path = Path::new(&file_path).strip_prefix(&dir)?;
-        zip.start_file(
-            entry_path.display().to_string(),
-            zip::write::FileOptions::default(),
-        )?;
+        zip.start_file(entry_path.display().to_string(), zip::write::FileOptions::default())?;
         let mut file = File::open(&file_path)?;
         std::io::copy(&mut file, &mut zip)?;
     }
@@ -155,92 +141,32 @@ fn compress_xlsx(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn cleanup(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::remove_dir_all(dir)?;
-    println!("Removed {}", dir);
-
-    Ok(())
-}
-
-fn unpro_xlsx(file: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let dir = decompress_xlsx(file)?;
-    unlock_xlsx_workbook(&dir)?;
-    unlock_xlsx_worksheets(&dir)?;
-    compress_xlsx(&dir)?;
-    cleanup(&dir)?;
-    println!("Successfully unprotected {}", file);
-    Ok(())
-}
-
-fn auto() -> Result<(), Box<dyn std::error::Error>> {
-    // Get xlsx file from corrent directory
-    let files = get_files(".")?;
-
-    // rm non-xlsx files
-    let files = files
-        .into_iter()
-        .filter(|f| f.ends_with(".xlsx"))
-        .collect::<Vec<String>>();
-
-    // check if any xlsx files found
-    if files.len() == 0 {
-        println!("No xlsx files found");
-
-        // pause
-        println!("Press enter to exit...");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-
-        return Ok(());
-    }
-
-    // ask for confirmation
-    for f in &files {
-        println!("{}", f);
-    }
-    println!(
-        "Found {} xlsx files. Continue? (any key to continue, n to abort)",
-        files.len()
-    );
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
-    if input.trim() == "n" {
-        println!("Aborted");
-        return Ok(());
-    }
-
-    // Unprotect each xlsx file
-    for f in files {
-        unpro_xlsx(&f)?;
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
+    // Get command-line argument
+    let args: Vec<String> = env::args().collect();
 
-    if args.len() == 1 {
-        auto()?;
-    } else if args.len() >= 2 {
-        for file in &args[1..] {
-            // check if file exists
-            if !Path::new(file).exists() {
-                println!("File not found: {}", file);
-                continue;
-            }
-
-            // unprotect xlsx file
-            unpro_xlsx(file)?;
-        }
-    } else {
-        println!("Usage: unpro_xlsx [file1] [file2] ...");
+    // Check if there is an argument
+    if args.len() < 2 {
+        println!("Usage: unpro file.xlsx");
+        std::process::exit(1);
     }
 
-    // pause
-    println!("Press enter to exit...");
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
+    let file = &args[1];
+
+    // Decompress
+    let dir = decompress_xlsx(file)?;
+
+    // Unlock workbook
+    unlock_xlsx_workbook(&dir)?;
+
+    // Unlock worksheets
+    unlock_xlsx_worksheets(&dir)?;
+
+    // Compress
+    compress_xlsx(&dir)?;
+
+    // Remove directory
+    std::fs::remove_dir_all(&dir)?;
 
     Ok(())
 }
